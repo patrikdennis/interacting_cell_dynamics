@@ -11,12 +11,12 @@ import time
 ## Events ##
 ############
 class BirthEvent:
-	# MODIFIED: Removed betaProportion and added a fixed beta parameter
+	# Removed betaProportion and added a fixed beta parameter
 	def __init__(self, alpha, beta, ceta, particleRadius):
 		self.alpha 			= alpha
 		self.ceta  			= ceta
 		self.particleRadius = particleRadius
-		# MODIFIED: Beta is now a fixed value as per the paper (0.8)
+		# Beta is now a fixed value as per the paper (0.8)
 		self.beta  			= beta
 
 	def probability(self, P):
@@ -31,7 +31,7 @@ class BirthEvent:
 				D  = np.linalg.norm(AB, axis=1)
 				D[D < self.particleRadius * 2] = self.particleRadius * 2
 
-				# MODIFIED: The inhibition kernel now matches e^(-gamma*r) with gamma=ceta
+				# The inhibition kernel now matches e^(-gamma*r) with gamma=ceta
 				# Removed division by self.particleRadius
 				I = np.exp(-self.ceta * D)
 
@@ -40,11 +40,11 @@ class BirthEvent:
 
 		return self.alpha * (1 - self.beta * inhibition)
 
-	# MODIFIED: Method signature changed to accept a random state object 'rs'
+	#  Method signature changed to accept a random state object 'rs'
 	def execute(self, P, eventIndex, rs):
 		index = np.argmax(np.isnan(P[:, 0]))
 
-		# MODIFIED: Daughter cell is now placed at distance R (radius) at a random angle
+		#  Daughter cell is now placed at distance R (radius) at a random angle
 		parent_pos = P[eventIndex, :]
 		angle = rs.rand() * 2 * np.pi
 		offset = np.array([np.cos(angle), np.sin(angle)]) * self.particleRadius
@@ -216,7 +216,7 @@ class Simulation:
 		displacement_stochastic = np.concatenate((np.cos(angle), np.sin(angle)), axis=1) * radius
 
 
-		# MODIFIED: Integration now correctly applies the Euler-Maruyama method
+		#  Integration now correctly applies the Euler-Maruyama method
 		# Deterministic forces are scaled by timeStep, stochastic displacement is added directly.
 		P += timeStep * F_deterministic + displacement_stochastic
 

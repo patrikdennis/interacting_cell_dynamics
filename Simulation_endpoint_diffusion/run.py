@@ -172,7 +172,7 @@ def run_simulation(seed):
     cellSpeed = np.sqrt(2 * diffusion)
     arena  = simulation.RectangularArena(params["arena_rect"], params["edge_force"] , size)
     
-    # MODIFIED: Instantiation of BirthEvent now passes the fixed beta value (0.8) from the paper
+    #  Instantiation of BirthEvent now passes the fixed beta value (0.8) from the paper
     beta = 0.8
     events = [simulation.BirthEvent(alpha, beta, params["ceta"], size)]
     

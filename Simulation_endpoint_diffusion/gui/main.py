@@ -4,7 +4,7 @@ import numpy as np
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QDoubleSpinBox, QSpinBox, QStatusBar, QFrame, QSizePolicy
+    QPushButton, QLabel, QDoubleSpinBox, QSpinBox, QStatusBar, QFrame, QSizePolicy, QGridLayout
 )
 from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QFont
@@ -36,7 +36,12 @@ class SimulationWorker(QObject):
             cell_speed = np.sqrt(2 * self.parameters["diffusion"])
             arena = sim.RectangularArena(self.parameters["arena_rect"], self.parameters["edge_force"], self.parameters["radius"])
             beta = 0.8
+            
+            # --- MODIFICATION: Conditionally add DeathEvent based on 'mu' parameter ---
             events = [sim.BirthEvent(self.parameters["alpha"], beta, self.parameters["ceta"], self.parameters["radius"])]
+            if self.parameters.get("mu", 0) > 0:
+                events.append(sim.DeathEvent(self.parameters["mu"]))
+
             collision_function = sim.createRigidPotential(self.parameters["repulsion_force"], 2 * self.parameters["radius"])
 
             simulation_instance = sim.Simulation(
@@ -181,14 +186,16 @@ class MainWindow(QMainWindow):
         self.canvas = SimulationCanvas(self.arena_rect)
         
         controls_widget = QWidget()
-        # --- FIX 1: Replaced setFixedWidth with setMaximumWidth for flexible resizing ---
-        controls_widget.setMaximumWidth(350)
         controls_layout = QVBoxLayout(controls_widget)
         controls_layout.setContentsMargins(10, 10, 10, 10)
         controls_layout.setSpacing(10)
         
         self.param_widgets = {}
-        self._create_parameter_widgets(controls_layout)
+        # --- MODIFICATION: Create a grid layout for parameters ---
+        self.params_grid_layout = QGridLayout()
+        self._create_parameter_widgets(self.params_grid_layout)
+        controls_layout.addLayout(self.params_grid_layout)
+
         controls_layout.addStretch(1)
 
         button_layout = QHBoxLayout()
@@ -218,37 +225,41 @@ class MainWindow(QMainWindow):
         self.restart_simulation()
 
     def _create_parameter_widgets(self, layout):
-        # --- FIX 2: Increased maximum values for SpinBox inputs ---
         params_config = {
             "num_particles": {"label": "Initial Particles", "type": "int", "min": 1, "max": 1000, "val": 100},
             "max_particles": {"label": "Max Particles", "type": "int", "min": 100, "max": 5000, "val": 2000},
-            "simulation_days": {"label": "Simulation Length (Days)", "type": "double", "min": 0.1, "max": 9999.0, "val": 4.0, "step": 0.1},
-            "simulation_speed": {"label": "Simulation Speed (Multiplier)", "type": "double", "min": 0.1, "max": 100.0, "val": 1.0, "step": 0.1},
-            "log10_alpha": {"label": "Proliferation Rate (log10 α)", "type": "double", "min": -10.0, "max": 0.0, "val": -4.8, "step": 0.1},
+            "simulation_days": {"label": "Sim Length (Days)", "type": "double", "min": 0.1, "max": 9999.0, "val": 4.0, "step": 0.1},
+            "simulation_speed": {"label": "Sim Speed (x)", "type": "double", "min": 0.1, "max": 100.0, "val": 1.0, "step": 0.1},
+            "log10_alpha": {"label": "Prolif. Rate (log α)", "type": "double", "min": -10.0, "max": 0.0, "val": -4.8, "step": 0.1},
+            # --- MODIFICATION: Added death rate parameter ---
+            "log10_mu": {"label": "Death Rate (log μ)", "type": "double", "min": -10.0, "max": 0.0, "val": -8.0, "step": 0.1},
             "diffusion": {"label": "Diffusion (D)", "type": "double", "min": 0.0, "max": 9999.0, "val": 0.5, "step": 0.1},
             "radius": {"label": "Cell Radius (μm)", "type": "double", "min": 1.0, "max": 100.0, "val": 7.5, "step": 0.5},
             "repulsion_force": {"label": "Repulsion Force", "type": "double", "min": 0.0, "max": 100.0, "val": 0.1, "step": 0.01},
             "edge_force": {"label": "Edge Force", "type": "double", "min": 0.0, "max": 100.0, "val": 0.01, "step": 0.01},
-            "ceta": {"label": "Inhibition Constant (γ)", "type": "double", "min": 0.0, "max": 100.0, "val": 1.0, "step": 0.1},
+            "ceta": {"label": "Inhibition Const (γ)", "type": "double", "min": 0.0, "max": 100.0, "val": 1.0, "step": 0.1},
             "seed": {"label": "Random Seed", "type": "int", "min": 0, "max": 999999, "val": 42},
         }
 
-        for name, config in params_config.items():
-            layout.addWidget(QLabel(config["label"]))
+        # --- MODIFICATION: Loop to populate the grid layout in two columns ---
+        for i, (name, config) in enumerate(params_config.items()):
+            row = i // 2
+            col = (i % 2) * 2
+
+            label = QLabel(config["label"])
             widget = QSpinBox() if config["type"] == "int" else QDoubleSpinBox()
             if config["type"] == "double": widget.setSingleStep(config.get("step", 0.1))
+            
             widget.setRange(config["min"], config["max"])
             widget.setValue(config["val"])
-            layout.addWidget(widget)
+            
+            layout.addWidget(label, row, col)
+            layout.addWidget(widget, row, col + 1)
+            
             self.param_widgets[name] = widget
 
             if name == "simulation_speed":
                 widget.valueChanged.connect(self.update_simulation_speed)
-
-            line = QFrame()
-            line.setFrameShape(QFrame.Shape.HLine)
-            line.setFrameShadow(QFrame.Shadow.Sunken)
-            layout.addWidget(line)
 
     def _stop_current_simulation(self):
         if self.simulation_thread and self.simulation_thread.isRunning():
@@ -266,6 +277,8 @@ class MainWindow(QMainWindow):
         params = {name: widget.value() for name, widget in self.param_widgets.items()}
         params["simulation_length"] = params.pop("simulation_days") * 24 * 3600
         params["alpha"] = 10**params.pop("log10_alpha")
+        # --- MODIFICATION: Get mu value from parameters ---
+        params["mu"] = 10**params.pop("log10_mu")
         params["arena_rect"] = self.arena_rect
         
         self.simulation_thread = QThread()
@@ -324,10 +337,10 @@ class MainWindow(QMainWindow):
         self.setStyleSheet("""
             QMainWindow { background-color: #2b2b2b; }
             QWidget { color: #dcdcdc; }
-            QLabel { font-size: 11pt; }
+            QLabel { font-size: 10pt; }
             QDoubleSpinBox, QSpinBox {
                 background-color: #3c3f41; border: 1px solid #555;
-                border-radius: 4px; padding: 5px; font-size: 11pt;
+                border-radius: 4px; padding: 5px; font-size: 10pt;
             }
             QPushButton {
                 background-color: #007acc; border: none; color: white;

@@ -37,7 +37,6 @@ class SimulationWorker(QObject):
             arena = sim.RectangularArena(self.parameters["arena_rect"], self.parameters["edge_force"], self.parameters["radius"])
             beta = 0.8
             
-            # --- MODIFICATION: Conditionally add DeathEvent based on 'mu' parameter ---
             events = [sim.BirthEvent(self.parameters["alpha"], beta, self.parameters["ceta"], self.parameters["radius"])]
             if self.parameters.get("mu", 0) > 0:
                 events.append(sim.DeathEvent(self.parameters["mu"]))
@@ -119,9 +118,9 @@ class SimulationCanvas(QWidget):
     def wheelEvent(self, event):
         angle = event.angleDelta().y()
         if angle > 0:
-            self.zoom_level *= 1.15
+            self.zoom_level *= 1.05     # 1.15 
         else:
-            self.zoom_level /= 1.15
+            self.zoom_level /= 1.05     # 1.15
         self.zoom_level = max(0.1, min(self.zoom_level, 10.0))
         self.update()
 

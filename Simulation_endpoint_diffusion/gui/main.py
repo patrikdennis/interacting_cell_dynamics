@@ -4,10 +4,10 @@ import numpy as np
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QDoubleSpinBox, QSpinBox, QStatusBar, QFrame
+    QPushButton, QLabel, QDoubleSpinBox, QSpinBox, QStatusBar, QFrame, QSizePolicy
 )
 from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt
-from PyQt6.QtGui import QPainter, QColor, QPen, QBrush
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QFont
 import simulation as sim
 
 # A worker class to run the simulation in a separate thread
@@ -96,14 +96,17 @@ class SimulationCanvas(QWidget):
     """
     def __init__(self, arena_rect):
         super().__init__()
-        self.setMinimumSize(600, 600)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.particles = np.array([])
+        self.time = 0.0
+        self.cell_radius = 7.5 
         self.cell_radius_pixels = 5
         self.arena_rect = arena_rect
         self.setStyleSheet("background-color: #1a1a1a;")
         self.zoom_level = 1.0
 
-    def update_data(self, particles, radius):
+    def update_data(self, t, particles, radius):
+        self.time = t
         self.particles = particles
         self.cell_radius = radius
         self.update()
@@ -118,9 +121,6 @@ class SimulationCanvas(QWidget):
         self.update()
 
     def paintEvent(self, event):
-        if self.particles is None or len(self.particles) == 0:
-            return
-
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -139,19 +139,38 @@ class SimulationCanvas(QWidget):
         painter.setPen(QPen(QColor("#404040"), 2))
         painter.drawRect(arena_x, arena_y, arena_w, arena_h)
 
-        painter.setPen(QPen(QColor("#00aaff"), 1))
-        painter.setBrush(QBrush(QColor("#00aaff")))
-        for p in self.particles:
-            tx = (p[0] - self.arena_rect[0]) * scale + offset_x
-            ty = (p[1] - self.arena_rect[1]) * scale + offset_y
-            painter.drawEllipse(int(tx - self.cell_radius_pixels), int(ty - self.cell_radius_pixels), int(2 * self.cell_radius_pixels), int(2 * self.cell_radius_pixels))
+        if self.particles is not None and len(self.particles) > 0:
+            painter.setPen(QPen(QColor("#00aaff"), 1))
+            painter.setBrush(QBrush(QColor("#00aaff")))
+            for p in self.particles:
+                tx = (p[0] - self.arena_rect[0]) * scale + offset_x
+                ty = (p[1] - self.arena_rect[1]) * scale + offset_y
+                painter.drawEllipse(int(tx - self.cell_radius_pixels), int(ty - self.cell_radius_pixels), int(2 * self.cell_radius_pixels), int(2 * self.cell_radius_pixels))
+
+        painter.setPen(QColor("white"))
+        font = QFont()
+        font.setPointSize(14)
+        painter.setFont(font)
+
+        total_seconds = int(self.time)
+        days = total_seconds // (24 * 3600)
+        remaining_seconds = total_seconds % (24 * 3600)
+        hours = remaining_seconds // 3600
+        minutes = (remaining_seconds % 3600) // 60
+        
+        time_str = f"Time: {days}d {hours:02d}h {minutes:02d}m"
+        cell_str = f"Cells: {len(self.particles)}"
+        
+        painter.drawText(20, 30, time_str)
+        painter.drawText(20, 60, cell_str)
+
 
 # Main Application Window
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Agent-Based Cell Simulation")
-        self.setGeometry(100, 100, 1200, 800)
+        self.resize(1200, 800)
 
         central_widget = QWidget()
         self.main_layout = QHBoxLayout(central_widget)
@@ -162,7 +181,8 @@ class MainWindow(QMainWindow):
         self.canvas = SimulationCanvas(self.arena_rect)
         
         controls_widget = QWidget()
-        controls_widget.setFixedWidth(300)
+        # --- FIX 1: Replaced setFixedWidth with setMaximumWidth for flexible resizing ---
+        controls_widget.setMaximumWidth(350)
         controls_layout = QVBoxLayout(controls_widget)
         controls_layout.setContentsMargins(10, 10, 10, 10)
         controls_layout.setSpacing(10)
@@ -181,6 +201,9 @@ class MainWindow(QMainWindow):
         self.main_layout.addWidget(self.canvas)
         self.main_layout.addWidget(controls_widget)
         
+        self.main_layout.setStretchFactor(self.canvas, 1)
+        self.main_layout.setStretchFactor(controls_widget, 0)
+
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
@@ -195,18 +218,19 @@ class MainWindow(QMainWindow):
         self.restart_simulation()
 
     def _create_parameter_widgets(self, layout):
+        # --- FIX 2: Increased maximum values for SpinBox inputs ---
         params_config = {
             "num_particles": {"label": "Initial Particles", "type": "int", "min": 1, "max": 1000, "val": 100},
             "max_particles": {"label": "Max Particles", "type": "int", "min": 100, "max": 5000, "val": 2000},
-            "simulation_days": {"label": "Simulation Length (Days)", "type": "double", "min": 0.1, "max": 10.0, "val": 4.0, "step": 0.1},
-            "simulation_speed": {"label": "Simulation Speed (Multiplier)", "type": "double", "min": 0.1, "max": 10.0, "val": 1.0, "step": 0.1},
-            "log10_alpha": {"label": "Proliferation Rate (log10 α)", "type": "double", "min": -7.0, "max": -4.0, "val": -4.8, "step": 0.1},
-            "diffusion": {"label": "Diffusion (D)", "type": "double", "min": 0.0, "max": 10.0, "val": 0.5, "step": 0.1},
-            "radius": {"label": "Cell Radius (μm)", "type": "double", "min": 2.0, "max": 20.0, "val": 7.5, "step": 0.5},
-            "repulsion_force": {"label": "Repulsion Force", "type": "double", "min": 0.0, "max": 1.0, "val": 0.1, "step": 0.01},
-            "edge_force": {"label": "Edge Force", "type": "double", "min": 0.0, "max": 1.0, "val": 0.01, "step": 0.01},
-            "ceta": {"label": "Inhibition Constant (γ)", "type": "double", "min": 0.0, "max": 5.0, "val": 1.0, "step": 0.1},
-            "seed": {"label": "Random Seed", "type": "int", "min": 0, "max": 99999, "val": 42},
+            "simulation_days": {"label": "Simulation Length (Days)", "type": "double", "min": 0.1, "max": 9999.0, "val": 4.0, "step": 0.1},
+            "simulation_speed": {"label": "Simulation Speed (Multiplier)", "type": "double", "min": 0.1, "max": 100.0, "val": 1.0, "step": 0.1},
+            "log10_alpha": {"label": "Proliferation Rate (log10 α)", "type": "double", "min": -10.0, "max": 0.0, "val": -4.8, "step": 0.1},
+            "diffusion": {"label": "Diffusion (D)", "type": "double", "min": 0.0, "max": 9999.0, "val": 0.5, "step": 0.1},
+            "radius": {"label": "Cell Radius (μm)", "type": "double", "min": 1.0, "max": 100.0, "val": 7.5, "step": 0.5},
+            "repulsion_force": {"label": "Repulsion Force", "type": "double", "min": 0.0, "max": 100.0, "val": 0.1, "step": 0.01},
+            "edge_force": {"label": "Edge Force", "type": "double", "min": 0.0, "max": 100.0, "val": 0.01, "step": 0.01},
+            "ceta": {"label": "Inhibition Constant (γ)", "type": "double", "min": 0.0, "max": 100.0, "val": 1.0, "step": 0.1},
+            "seed": {"label": "Random Seed", "type": "int", "min": 0, "max": 999999, "val": 42},
         }
 
         for name, config in params_config.items():
@@ -280,10 +304,17 @@ class MainWindow(QMainWindow):
         self.play_stop_button.setEnabled(False)
 
     def update_frame(self, t, particles):
-        days = t / (24 * 3600)
-        self.status_bar.showMessage(f"Time: {days:.2f} days | Cells: {len(particles)}")
         radius = self.param_widgets["radius"].value()
-        self.canvas.update_data(particles, radius)
+        self.canvas.update_data(t, particles, radius)
+        
+        total_seconds = int(t)
+        days = total_seconds // (24 * 3600)
+        remaining_seconds = total_seconds % (24 * 3600)
+        hours = remaining_seconds // 3600
+        minutes = (remaining_seconds % 3600) // 60
+        time_str = f"Time: {days}d {hours:02d}h {minutes:02d}m"
+        cell_str = f"Cells: {len(particles)}"
+        self.status_bar.showMessage(f"{time_str} | {cell_str}")
         
     def closeEvent(self, event):
         self._stop_current_simulation()

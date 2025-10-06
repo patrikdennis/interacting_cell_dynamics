@@ -190,7 +190,7 @@ class MainWindow(QMainWindow):
         controls_layout.setSpacing(10)
         
         self.param_widgets = {}
-        # --- MODIFICATION: Create a grid layout for parameters ---
+        #  Create a grid layout for parameters 
         self.params_grid_layout = QGridLayout()
         self._create_parameter_widgets(self.params_grid_layout)
         controls_layout.addLayout(self.params_grid_layout)
@@ -230,7 +230,6 @@ class MainWindow(QMainWindow):
             "simulation_days": {"label": "Sim Length (Days)", "type": "double", "min": 0.1, "max": 9999.0, "val": 4.0, "step": 0.1},
             "simulation_speed": {"label": "Sim Speed (x)", "type": "double", "min": 0.1, "max": 100.0, "val": 1.0, "step": 0.1},
             "log10_alpha": {"label": "Prolif. Rate (log α)", "type": "double", "min": -10.0, "max": 0.0, "val": -4.8, "step": 0.1},
-            # --- MODIFICATION: Added death rate parameter ---
             "log10_mu": {"label": "Death Rate (log μ)", "type": "double", "min": -10.0, "max": 0.0, "val": -8.0, "step": 0.1},
             "diffusion": {"label": "Diffusion (D)", "type": "double", "min": 0.0, "max": 9999.0, "val": 0.5, "step": 0.1},
             "radius": {"label": "Cell Radius (μm)", "type": "double", "min": 1.0, "max": 100.0, "val": 7.5, "step": 0.5},
@@ -240,7 +239,7 @@ class MainWindow(QMainWindow):
             "seed": {"label": "Random Seed", "type": "int", "min": 0, "max": 999999, "val": 42},
         }
 
-        # --- MODIFICATION: Loop to populate the grid layout in two columns ---
+        #Loop to populate the grid layout in two columns 
         for i, (name, config) in enumerate(params_config.items()):
             row = i // 2
             col = (i % 2) * 2
@@ -276,7 +275,7 @@ class MainWindow(QMainWindow):
         params = {name: widget.value() for name, widget in self.param_widgets.items()}
         params["simulation_length"] = params.pop("simulation_days") * 24 * 3600
         params["alpha"] = 10**params.pop("log10_alpha")
-        # --- MODIFICATION: Get mu value from parameters ---
+        # Get mu value from parameters
         params["mu"] = 10**params.pop("log10_mu")
         params["arena_rect"] = self.arena_rect
         

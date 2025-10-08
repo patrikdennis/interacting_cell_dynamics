@@ -561,7 +561,7 @@ def draw_contours(
     dark_rel_each: float = 0.020,
     min_dark_edge_cover: float = 0.60
 ):
-    # ... (contour finding logic is unchanged) ...
+    
     I0 = load_grayscale(image_path)
     H0, W0 = I0.shape
     if pad_value != "auto":
@@ -779,7 +779,6 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    # ... (main execution block is unchanged) ...
     args = parse_args()
     kwargs = vars(args)
     if args.folder:

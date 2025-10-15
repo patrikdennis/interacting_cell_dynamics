@@ -1,1 +1,0 @@
-- use gui to find high low and medium for parameter estimation

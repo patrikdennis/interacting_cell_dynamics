@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Fully optimized contour detection.
-Now with multiple output modes and a robust, border-free saving mechanism.
-"""
 import os
 import argparse
 import numpy as np
@@ -289,7 +284,7 @@ def draw_contours(
         # Save the segmented image
         cv2.imwrite(os.path.join(path_segmented, out_filename), segmented_image_cv, tiff_compression)
 
-        # Save the feature image (squares on black)
+        # Save the feature image (squares on black background)
         feature_image = np.zeros((H0, W0), dtype=np.uint8)
         for cX, cY in centroids:
             half_size = square_size // 2
@@ -298,7 +293,7 @@ def draw_contours(
             cv2.rectangle(feature_image, (x1, y1), (x2, y2), 255, thickness=cv2.FILLED)
         cv2.imwrite(os.path.join(path_features, out_filename), feature_image, tiff_compression)
 
-        # Save the overlay image (squares on segmented)
+        # Save the overlay image (squares on segmented image)
         overlay_image = segmented_image_cv.copy()
         for cX, cY in centroids:
             half_size = square_size // 2

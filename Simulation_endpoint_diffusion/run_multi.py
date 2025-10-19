@@ -5,6 +5,7 @@ from typing import Tuple, Dict, Any, List
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
+from scipy.stats import norm
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -24,7 +25,8 @@ SEED          = int(os.environ.get("SEED", "42"))
 
 # Parallelism and batching
 N_JOBS     = int(os.environ.get("N_JOBS", max(1, (os.cpu_count() or 2) - 1)))
-BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "2000"))
+default_batch_size = N_SIMULATIONS / 4
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", default_batch_size))
 
 # Always-on full snapshots toggle (all particles, last timestep)
 SAVE_SNAPSHOTS = int(os.environ.get("SAVE_SNAPSHOTS", "0"))  # 0/1
@@ -45,7 +47,7 @@ simulation_parameters: Dict[str, Any] = {
     "rMax": 65,
     "arena_rect": arena_rect,
     "measure_rect": measure_rect,
-    "edge_force": 0.01,
+    "edge_force": 0.04,
     "repulsion_force": 0.1,
     "beta_proportion": 0.8,
     "ceta": 1,
@@ -53,7 +55,7 @@ simulation_parameters: Dict[str, Any] = {
 
 parameter_priors: Dict[str, Tuple[float, float]] = {
     "log10_alpha": (-6.0, -4.8),
-    "log10_d":     (-2.0,  1.0),
+    "log10_d":     (-3.0,  1.0),
     "r":           ( 2.0, 20.0),
 }
 
@@ -119,8 +121,19 @@ def run_one(sim_id: int, seed: int):
     diffusion = 10.0 ** log10_d
     alpha = 10.0 ** log10_alpha
     cell_speed = np.sqrt(2.0 * diffusion)
-
-    arena = simulation.RectangularArena(params["arena_rect"], params["edge_force"], r)
+    
+    eps = 1e-4
+    z_eps = norm.ppf(1 - eps)
+    repulsion_edge_force = z_eps * np.sqrt(2* diffusion/ params['simulation_step'])
+    repulsion_edge_force = z_eps * cell_speed / np.sqrt(params['simulation_step'])
+    
+    if repulsion_edge_force == 0:
+        repulsion_edge_force = 0.01
+        
+    arena  = simulation.RectangularArena(params["arena_rect"], repulsion_edge_force , r)
+        
+    params["ceta"] = 1 / (2*3.07*r)
+    #arena = simulation.RectangularArena(params["arena_rect"], params["edge_force"], r)
     events = [simulation.BirthEvent(alpha, params["beta_proportion"], params["ceta"], r)]
     collision_fn = simulation.createRigidPotential(params["repulsion_force"], 2.0 * r)
 
@@ -326,7 +339,7 @@ def main():
             sim_id, summary, drawn, ecode, _radii, P, r = fut.result()
             first_rows.append(pack_sim_row(sim_id, summary, drawn, ecode))
             if SAVE_SNAPSHOTS:
-                # Write ALL particles from last timestep
+                # Write ALL cells/particles from last timestep
                 if P.size:
                     for k in range(P.shape[0]):
                         first_snaps.append({"sim_id": int(sim_id), "x": float(P[k,0]), "y": float(P[k,1]), "r": float(r)})
